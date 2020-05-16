@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Form Creator</title>
+  </head>
+  <body>
+	<script src="app.js"></script>
+	<script>
+		document.addEventListener('DOMContentLoaded', function(event){
+			let div = document.getElementById("main");
+			if(div){
+				div.appendChild(new DocumentList().render());
+			}
+		});
+	</script>
+		<div id="main"></div>
+  </body>  
+</html>
