@@ -1,4 +1,3 @@
-"use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -34,10 +33,11 @@ var FieldLabel = /** @class */ (function () {
     return FieldLabel;
 }());
 var InputField = /** @class */ (function () {
-    function InputField(nazwa, etykieta) {
+    function InputField(nazwa, etykieta, wartosc) {
         this.typ = FieldType.PoleTekstowe;
         this.nazwa = nazwa;
         this.etykieta = etykieta;
+        this.wartosc = wartosc;
     }
     InputField.prototype.getValue = function () {
         return (this.typ == FieldType.Checkbox) ? this.pole.checked : this.pole.value;
@@ -47,21 +47,26 @@ var InputField = /** @class */ (function () {
             case FieldType.PoleTekstowe:
                 this.pole = document.createElement('input');
                 this.pole.type = 'text';
+                this.pole.value = this.wartosc;
                 break;
             case FieldType.Data:
                 this.pole = document.createElement('input');
                 this.pole.type = 'date';
+                //this.pole.value = this.wartosc;
                 break;
             case FieldType.Email:
                 this.pole = document.createElement('input');
                 this.pole.type = 'email';
+                this.pole.value = this.wartosc;
                 break;
             case FieldType.Checkbox:
                 this.pole = document.createElement('input');
                 this.pole.type = 'checkbox';
+                this.pole.checked = this.wartosc;
                 break;
             case FieldType.PoleWielolinijkowe:
                 this.pole = document.createElement('textarea');
+                this.pole.value = this.wartosc;
                 break;
         }
         this.pole.name = this.nazwa;
@@ -107,11 +112,13 @@ var TextAreaField = /** @class */ (function (_super) {
 }(InputField));
 var SelectField = /** @class */ (function (_super) {
     __extends(SelectField, _super);
-    function SelectField(nazwa, etykieta, opcje) {
-        var _this = _super.call(this, nazwa, etykieta) || this;
+    function SelectField(nazwa, etykieta, opcje, wartosc) {
+        if (wartosc === void 0) { wartosc = ""; }
+        var _this = _super.call(this, nazwa, etykieta, wartosc) || this;
         _this.typ = FieldType.PoleWyboru;
         _this.pole = document.createElement("select");
         _this.pole.name = _this.nazwa;
+        _this.wartosc = wartosc;
         for (var _i = 0, opcje_1 = opcje; _i < opcje_1.length; _i++) {
             var opcja = opcje_1[_i];
             _this.dodajOpcje(opcja);
@@ -124,6 +131,14 @@ var SelectField = /** @class */ (function (_super) {
         this.pole.add(option);
     };
     SelectField.prototype.render = function () {
+        if (this.wartosc) {
+            for (var i = 0; i < this.pole.options.length; i++) {
+                if (this.pole.options[i].text == this.wartosc) {
+                    this.pole.options.selectedIndex = i;
+                    break;
+                }
+            }
+        }
         return this.pole;
     };
     return SelectField;
@@ -132,17 +147,6 @@ var Form = /** @class */ (function () {
     function Form() {
         this.pola = [];
         this.formularz = document.createElement("form");
-        this.pola.push(new InputField("imie", "Imię"));
-        this.pola.push(new InputField("nazwisko", "Nazwisko"));
-        this.pola.push(new EmailField("email", "E-mail"));
-        this.pola.push(new SelectField("kierunek", "Kierunek studiów", ["Fizyka", "Matematyka"]));
-        this.pola.push(new CheckboxField("elearning", "Czy preferujesz e-learning?"));
-        this.pola.push(new TextAreaField("uwagi", "Uwagi"));
-        for (var _i = 0, _a = this.pola; _i < _a.length; _i++) {
-            var pole = _a[_i];
-            this.formularz.appendChild((new FieldLabel(pole)).render());
-            this.formularz.appendChild(pole.render());
-        }
     }
     Form.prototype.getValue = function () {
         var objekt = {};
@@ -153,6 +157,12 @@ var Form = /** @class */ (function () {
         return objekt;
     };
     Form.prototype.render = function () {
+        this.formularz.innerHTML = "";
+        for (var _i = 0, _a = this.pola; _i < _a.length; _i++) {
+            var pole = _a[_i];
+            this.formularz.appendChild((new FieldLabel(pole)).render());
+            this.formularz.appendChild(pole.render());
+        }
         var button = document.createElement('button');
         button.type = 'button';
         button.textContent = 'Zapisz';
@@ -166,7 +176,7 @@ var Form = /** @class */ (function () {
         return this.formularz;
     };
     Form.prototype.save = function () {
-        new LocStorage().saveDocument(this.getValue());
+        (new LocStorage).saveDocument(this.getValue());
         window.location.href = "index.html";
     };
     return Form;
@@ -181,6 +191,8 @@ var LocStorage = /** @class */ (function () {
     };
     LocStorage.prototype.addDocumentId = function (id) {
         var o = this.getDocuments();
+        if (o.indexOf(id) >= 0)
+            return id;
         o.push(id);
         localStorage.setItem('documents', JSON.stringify(o));
         return id;
@@ -197,6 +209,35 @@ var LocStorage = /** @class */ (function () {
             return JSON.parse(o);
         return [];
     };
+    LocStorage.prototype.removeDocument = function (id) {
+        var o = this.getDocuments();
+        var i = o.indexOf(id);
+        if (i >= 0) {
+            o.splice(i, 1);
+            localStorage.setItem('documents', JSON.stringify(o));
+            localStorage.removeItem(id);
+        }
+    };
+    LocStorage.prototype.saveForm = function (form) {
+        var id = 'form-' + Date.now();
+        localStorage.setItem(id, JSON.stringify(form));
+        return this.addDocumentId(id);
+    };
+    LocStorage.prototype.loadForm = function (id) {
+        var o = localStorage.getItem(id);
+        if (o) {
+            var obj = JSON.parse(o);
+            var form = new Form();
+            for (var _i = 0, _a = obj.pola; _i < _a.length; _i++) {
+                var pole = _a[_i];
+                var p = new InputField(pole.nazwa, pole.etykieta, pole.wartosc);
+                p.typ = pole.typ;
+                form.pola.push(p);
+            }
+            return form;
+        }
+        return null;
+    };
     return LocStorage;
 }());
 var DocumentList = /** @class */ (function () {
@@ -208,17 +249,37 @@ var DocumentList = /** @class */ (function () {
     DocumentList.prototype.getDocumentList = function () {
         this.lista = this.storage.getDocuments();
     };
+    DocumentList.prototype.removeDocument = function (id) {
+        this.storage.removeDocument(id);
+    };
+    DocumentList.prototype.getDocument = function (id) {
+        return this.storage.loadDocument(id);
+    };
     DocumentList.prototype.render = function () {
         var table = document.createElement("table");
         for (var _i = 0, _a = this.lista; _i < _a.length; _i++) {
             var id = _a[_i];
             var tr = table.insertRow();
-            var td = tr.insertCell();
             var a = document.createElement('a');
             a.appendChild(document.createTextNode(id));
-            a.href = '#';
-            a.addEventListener('click', function (self, id) { return function () { alert(JSON.stringify(self.storage.loadDocument(id))); }; }(this, id));
-            td.appendChild(a);
+            if (id.substr(0, 4) == 'form') {
+                a.href = 'edit-form.html?id=' + id;
+            }
+            else {
+                a.href = 'edit-document.html?id=' + id;
+            }
+            // a.addEventListener('click', function(self, id){ return function(){ alert(JSON.stringify(self.storage.loadDocument(id))); }}(this, id));
+            tr.insertCell().appendChild(a);
+            var usun = document.createElement('button');
+            usun.type = 'button';
+            usun.textContent = 'Usuń';
+            usun.addEventListener('click', function (self, id) {
+                return function () {
+                    self.removeDocument(id);
+                    window.location.reload();
+                };
+            }(this, id));
+            tr.insertCell().appendChild(usun);
         }
         var button = document.createElement('button');
         button.type = 'button';
@@ -230,11 +291,115 @@ var DocumentList = /** @class */ (function () {
     return DocumentList;
 }());
 var App = /** @class */ (function () {
-    function App() {
-        this.form = new Form();
+    function App(id) {
+        this.parent = document.getElementById(id);
     }
-    App.prototype.render = function () {
-        return this.form.render();
+    App.prototype.createDocumentForm = function (id) {
+        var doc = (new DocumentList).getDocument(id) || {};
+        var documentForm = new Form();
+        documentForm.pola.push(new InputField("imie", "Imię", doc.imie || ""));
+        documentForm.pola.push(new InputField("nazwisko", "Nazwisko", doc.nazwisko || ""));
+        documentForm.pola.push(new EmailField("email", "E-mail", doc.email || ""));
+        documentForm.pola.push(new SelectField("kierunek", "Kierunek studiów", ["Fizyka", "Matematyka"], doc.kierunek || ""));
+        documentForm.pola.push(new CheckboxField("elearning", "Czy preferujesz e-learning?", doc.elearning || false));
+        documentForm.pola.push(new TextAreaField("uwagi", "Uwagi", doc.uwagi || ""));
+        return documentForm.render();
+    };
+    App.prototype.editDocument = function () {
+        var id = Router.getParam('id');
+        if (id)
+            this.parent.appendChild(this.createDocumentForm(id));
+    };
+    App.prototype.documentList = function () {
+        this.parent.appendChild(new DocumentList().render());
+    };
+    App.prototype.newDocument = function () {
+        this.parent.appendChild(this.createDocumentForm());
+    };
+    App.prototype.formCreator = function () {
+        var fc = new FormCreator();
+        var id = Router.getParam('id');
+        if (id) {
+            this.parent.appendChild(fc.editForm(id));
+            return;
+        }
+        this.parent.appendChild(fc.newForm());
     };
     return App;
+}());
+var Router = /** @class */ (function () {
+    function Router() {
+    }
+    Router.getParam = function (key) {
+        var query = window.location.search.substr(1);
+        var urlParams = new URLSearchParams(query);
+        return urlParams.get(key);
+    };
+    return Router;
+}());
+var FormCreator = /** @class */ (function () {
+    function FormCreator() {
+        this.pola = [];
+        this.form = document.createElement("form");
+        this.div = document.createElement("div");
+        this.content = document.createElement("div");
+        this.pola.push(new SelectField("type", "Typ pola", ["Pole tekstowe", "Pole wielolinijkowe", "Checkbox"]));
+        this.pola.push(new InputField("name", "Nazwa", ""));
+        this.pola.push(new InputField("label", "Etykieta", ""));
+        this.pola.push(new InputField("value", "Domyślna wartość", ""));
+        for (var _i = 0, _a = this.pola; _i < _a.length; _i++) {
+            var pole = _a[_i];
+            this.form.appendChild((new FieldLabel(pole)).render());
+            this.form.appendChild(pole.render());
+        }
+        this.button = document.createElement('button');
+        this.button.type = 'button';
+        this.button.textContent = 'Dodaj';
+        this.button.addEventListener('click', function (self) {
+            return function () {
+                switch (self.pola[0].getValue()) {
+                    case "Pole tekstowe":
+                        self.formNew.pola.push(new InputField(self.pola[1].getValue(), self.pola[2].getValue(), self.pola[3].getValue()));
+                        break;
+                    case "Pole wielolinijkowe":
+                        self.formNew.pola.push(new TextAreaField(self.pola[1].getValue(), self.pola[2].getValue(), self.pola[3].getValue()));
+                        break;
+                    case "Checkbox":
+                        self.formNew.pola.push(new CheckboxField(self.pola[1].getValue(), self.pola[2].getValue(), self.pola[3].getValue()));
+                        break;
+                }
+                self.div.innerHTML = "";
+                self.div.appendChild(self.formNew.render());
+            };
+        }(this));
+        this.form.appendChild(this.button);
+        var button1 = document.createElement('button');
+        button1.type = 'button';
+        button1.textContent = 'Zapisz';
+        button1.addEventListener('click', function (self) { return function () { self.saveForm(); }; }(this));
+        this.form.appendChild(button1);
+        var button2 = document.createElement('button');
+        button2.type = 'button';
+        button2.textContent = 'Wstecz';
+        button2.addEventListener('click', function () { window.location.href = "index.html"; });
+        this.form.appendChild(button2);
+        this.content.appendChild(this.div);
+        this.content.appendChild(document.createElement('hr'));
+        this.content.appendChild(this.form);
+    }
+    FormCreator.prototype.newForm = function () {
+        this.formNew = new Form();
+        return this.content;
+    };
+    FormCreator.prototype.editForm = function (id) {
+        this.formNew = (new LocStorage).loadForm(id);
+        this.div.innerHTML = "";
+        this.div.appendChild(this.formNew.render());
+        return this.content;
+    };
+    FormCreator.prototype.saveForm = function () {
+        (new LocStorage).saveForm(this.formNew);
+        window.location.href = "index.html";
+    };
+    return FormCreator;
 }());

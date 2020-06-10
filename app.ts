@@ -13,6 +13,7 @@ interface Field
     nazwa: string,
     etykieta: string,
     typ: FieldType,
+    wartosc: string|boolean,
     getValue(): string,
     render(): any
 }
@@ -37,6 +38,7 @@ class InputField implements Field
 {
     public nazwa: string; 
     public etykieta: string;
+    public wartosc: string|boolean;
     public typ: FieldType = FieldType.PoleTekstowe;
     protected pole: any;
       
@@ -45,10 +47,11 @@ class InputField implements Field
         return (this.typ == FieldType.Checkbox) ? this.pole.checked : this.pole.value;
     }
     
-    constructor(nazwa: string, etykieta: string)
+    constructor(nazwa: string, etykieta: string, wartosc: string|boolean)
     {
         this.nazwa = nazwa;
         this.etykieta = etykieta;
+        this.wartosc = wartosc;
     }
     
     public render(): any
@@ -58,21 +61,26 @@ class InputField implements Field
             case FieldType.PoleTekstowe:
                 this.pole = document.createElement('input');
                 this.pole.type = 'text';   
+                this.pole.value = this.wartosc;
             break;
             case FieldType.Data:
                 this.pole = document.createElement('input');
                 this.pole.type = 'date';   
+                //this.pole.value = this.wartosc;
             break;
             case FieldType.Email:
                 this.pole = document.createElement('input');
                 this.pole.type = 'email';  
+                this.pole.value = this.wartosc;
             break;
             case FieldType.Checkbox:
                 this.pole = document.createElement('input');
                 this.pole.type = 'checkbox';   
+                this.pole.checked = this.wartosc;
             break;
             case FieldType.PoleWielolinijkowe:
                 this.pole = document.createElement('textarea');
+                this.pole.value = this.wartosc;
             break;
         }
         this.pole.name = this.nazwa;
@@ -110,11 +118,12 @@ class SelectField extends InputField
         this.pole.add(option);
     }
     
-    constructor(nazwa: string, etykieta: string, opcje: string[])
+    constructor(nazwa: string, etykieta: string, opcje: string[], wartosc: string = "")
     {
-        super(nazwa, etykieta);
+        super(nazwa, etykieta, wartosc);
         this.pole = document.createElement("select");
         this.pole.name = this.nazwa;
+        this.wartosc = wartosc;
         for (let opcja of opcje) 
         {
             this.dodajOpcje(opcja);
@@ -123,28 +132,28 @@ class SelectField extends InputField
 
     public render(): any
     {
+        if(this.wartosc) 
+        {
+            for(let i = 0; i < this.pole.options.length; i++)
+            {
+                if(this.pole.options[i].text == this.wartosc)
+                {
+                    this.pole.options.selectedIndex = i;
+                    break;
+                } 
+            }
+        }
         return this.pole;
     }      
 }
 
 class Form 
 {
-    private pola: Field[] = [];
+    public pola: Field[] = [];
     private formularz: any;
     constructor()
     {
-        this.formularz = document.createElement("form");    
-        this.pola.push(new InputField("imie", "Imię"));
-        this.pola.push(new InputField("nazwisko", "Nazwisko"));
-        this.pola.push(new EmailField("email", "E-mail"));
-        this.pola.push(new SelectField("kierunek", "Kierunek studiów", ["Fizyka", "Matematyka"]));
-        this.pola.push(new CheckboxField("elearning", "Czy preferujesz e-learning?"));
-        this.pola.push(new TextAreaField("uwagi", "Uwagi"));
-        for (let pole of this.pola) 
-        {
-            this.formularz.appendChild((new FieldLabel(pole)).render()); 
-            this.formularz.appendChild(pole.render());
-        }
+        this.formularz = document.createElement("form"); 
     }
 
     public getValue(): any
@@ -159,6 +168,13 @@ class Form
 
     public render(): any
     {
+        this.formularz.innerHTML = "";
+        for (let pole of this.pola) 
+        {
+            this.formularz.appendChild((new FieldLabel(pole)).render()); 
+            this.formularz.appendChild(pole.render());
+        }
+
         let button = document.createElement('button');
         button.type = 'button';
         button.textContent = 'Zapisz';
@@ -175,7 +191,7 @@ class Form
 
     public save(): void
     {
-       new LocStorage().saveDocument(this.getValue());
+       (new LocStorage).saveDocument(this.getValue());
        window.location.href = "index.html";
     }
 
@@ -190,17 +206,17 @@ interface DataStorage
 
 class LocStorage implements DataStorage
 {
-
     public saveDocument(dokument: any): string 
     {
         const id = 'document-' + Date.now();
-    	localStorage.setItem(id, JSON.stringify(dokument));
-		return this.addDocumentId(id);
+        localStorage.setItem(id, JSON.stringify(dokument));
+        return this.addDocumentId(id);
     }
     
     private addDocumentId(id: string): string
     {
         let o = this.getDocuments();
+        if (o.indexOf(id) >= 0) return id;
         o.push(id);
         localStorage.setItem('documents', JSON.stringify(o));
         return id;
@@ -218,9 +234,45 @@ class LocStorage implements DataStorage
         let o = localStorage.getItem('documents');
         if(o) return JSON.parse(o);
         return [];
-	}
-}
+    }
+    
+    public removeDocument(id: string)
+    {
+        let o = this.getDocuments();
+        let i = o.indexOf(id);
+        if(i >= 0)
+        {
+            o.splice(i, 1);
+            localStorage.setItem('documents', JSON.stringify(o));
+            localStorage.removeItem(id);
+        }
+    }
 
+    public saveForm(form: any): string
+    {
+        const id = 'form-' + Date.now();
+        localStorage.setItem(id, JSON.stringify(form));
+        return this.addDocumentId(id);
+    }
+
+    public loadForm(id: string): any
+    {
+        let o = localStorage.getItem(id);
+        if (o)
+        {   
+            let obj = JSON.parse(o);
+            let form = new Form();
+            for(let pole of obj.pola)
+            {          
+                let p =  new InputField(pole.nazwa, pole.etykieta, pole.wartosc);
+                p.typ = pole.typ;
+                form.pola.push(p); 
+            }
+            return form;
+        }
+        return null;
+    }
+}
 
 class DocumentList
 {
@@ -236,18 +288,42 @@ class DocumentList
        this.lista = this.storage.getDocuments();
     }
 
+    public removeDocument(id: string)
+    {
+        this.storage.removeDocument(id);
+    }
+
+    public getDocument(id: string): any
+    {
+        return this.storage.loadDocument(id);
+    }
+
     public render(): any
     {
         let table = document.createElement("table");
         for (let id of this.lista) 
         {
             let tr = table.insertRow();
-            let td = tr.insertCell();
             let a = document.createElement('a');
             a.appendChild(document.createTextNode(id));
-            a.href= '#';
-            a.addEventListener('click', function(self, id){ return function(){ alert(JSON.stringify(self.storage.loadDocument(id))); }}(this, id));
-            td.appendChild(a);
+            if(id.substr(0, 4) == 'form')
+            {
+                a.href = 'edit-form.html?id=' + id;
+            }
+            else
+            {
+                a.href = 'edit-document.html?id=' + id;
+            }
+            tr.insertCell().appendChild(a);
+
+            let usun = document.createElement('button');
+            usun.type = 'button';
+            usun.textContent = 'Usuń';
+            usun.addEventListener('click', function(self, id){ return function(){ 
+                self.removeDocument(id);
+                window.location.reload();            
+            }}(this, id));
+            tr.insertCell().appendChild(usun);            
         }
 
         let button = document.createElement('button');
@@ -262,13 +338,142 @@ class DocumentList
 
 class App
 {
-    private form: Form;
-    constructor()
+    private parent: any;
+    constructor(id: string)
     {
-        this.form = new Form();
+        this.parent = document.getElementById(id);
     }
-    public render(): any
+
+    private createDocumentForm(id?: string): Form
     {
-        return this.form.render();
+        let doc = (new DocumentList).getDocument(id) || {};
+        let documentForm = new Form(); 
+        documentForm.pola.push(new InputField("imie", "Imię", doc.imie || ""));
+        documentForm.pola.push(new InputField("nazwisko", "Nazwisko", doc.nazwisko || ""));
+        documentForm.pola.push(new EmailField("email", "E-mail", doc.email || ""));
+        documentForm.pola.push(new SelectField("kierunek", "Kierunek studiów", ["Fizyka", "Matematyka"], doc.kierunek || ""));
+        documentForm.pola.push(new CheckboxField("elearning", "Czy preferujesz e-learning?", doc.elearning || false));
+        documentForm.pola.push(new TextAreaField("uwagi", "Uwagi", doc.uwagi || ""));
+        return documentForm.render();
+    }
+
+    public editDocument()
+    {
+        let id = Router.getParam('id');
+        if(id) this.parent.appendChild(this.createDocumentForm(id));
+    }
+
+    public documentList()
+    {
+        this.parent.appendChild(new DocumentList().render());
+    }
+
+    public newDocument()
+    {
+        this.parent.appendChild(this.createDocumentForm());
+    }
+
+    public formCreator()
+    {
+        let fc = new FormCreator();
+        
+        let id = Router.getParam('id');
+        if(id)
+        {
+            this.parent.appendChild(fc.editForm(id));
+            return;
+        } 
+        this.parent.appendChild(fc.newForm());
     }
 }
+
+class Router
+{
+    public static getParam(key: string): string
+    {
+        const query: string = window.location.search.substr(1);
+        const urlParams = new URLSearchParams(query);
+        return urlParams.get(key); 
+    }
+}
+
+
+class FormCreator
+{
+    private formNew: Form;
+    private form: HTMLFormElement;
+    private div: HTMLDivElement;
+    private content: HTMLDivElement;
+    private pola: Field[] = [];
+    private button: HTMLButtonElement;
+    constructor()
+    {
+        this.form = document.createElement("form");
+        this.div = document.createElement("div");
+        this.content = document.createElement("div");
+
+        this.pola.push(new SelectField("type", "Typ pola", ["Pole tekstowe", "Pole wielolinijkowe", "Checkbox"]));
+        this.pola.push(new InputField("name", "Nazwa", ""));
+        this.pola.push(new InputField("label", "Etykieta", ""));
+        this.pola.push(new InputField("value", "Domyślna wartość", ""));
+
+        for (let pole of this.pola) 
+        {
+            this.form.appendChild((new FieldLabel(pole)).render()); 
+            this.form.appendChild(pole.render());
+        }      
+
+        this.button = document.createElement('button');
+        this.button.type = 'button';
+        this.button.textContent = 'Dodaj';
+        this.button.addEventListener('click', function(self){ return function(){ 
+            switch(self.pola[0].getValue()) 
+            {
+                case "Pole tekstowe": self.formNew.pola.push(new InputField(self.pola[1].getValue(), self.pola[2].getValue(), self.pola[3].getValue())); break;
+                case "Pole wielolinijkowe":self.formNew.pola.push(new TextAreaField(self.pola[1].getValue(), self.pola[2].getValue(), self.pola[3].getValue())); break;
+                case "Checkbox": self.formNew.pola.push(new CheckboxField(self.pola[1].getValue(), self.pola[2].getValue(), self.pola[3].getValue())); break;            
+            }
+            self.div.innerHTML = "";
+            self.div.appendChild(self.formNew.render());
+        }}(this));
+        this.form.appendChild(this.button);
+        
+        let button1 = document.createElement('button');
+        button1.type = 'button';
+        button1.textContent = 'Zapisz';
+        button1.addEventListener('click', function(self){ return function(){ self.saveForm(); }}(this));
+        this.form.appendChild(button1);
+
+        let button2 = document.createElement('button');
+        button2.type = 'button';
+        button2.textContent = 'Wstecz';
+        button2.addEventListener('click', function(){ window.location.href = "index.html"; });   
+        this.form.appendChild(button2);
+
+        this.content.appendChild(this.div);
+        this.content.appendChild(document.createElement('hr'));
+        this.content.appendChild(this.form);
+    }
+
+    public newForm(): any
+    {
+        this.formNew = new Form();
+        return this.content;
+    }
+
+    public editForm(id: string)
+    {
+        this.formNew = (new LocStorage).loadForm(id);
+        this.div.innerHTML = "";
+        this.div.appendChild(this.formNew.render());
+        return this.content;
+    }
+
+    public saveForm()
+    {
+        (new LocStorage).saveForm(this.formNew);
+        window.location.href = "index.html";
+    }
+
+}
+
