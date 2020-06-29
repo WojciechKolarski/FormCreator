@@ -151,24 +151,45 @@ class Form
 {
     public pola: Field[] = [];
     private formularz: any;
+    public id: string;
     constructor()
     {
         this.formularz = document.createElement("form"); 
     }
 
-    public getValue(): any
+    public getValue()
     { 
-        let objekt: any = {};
+        // let objekt: any = {};
+        //for (let pole of this.pola)
+        //{
+        //   objekt[pole.nazwa] = pole.getValue();
+        //}
+        //return objekt;
+
         for (let pole of this.pola)
         {
-           objekt[pole.nazwa] = pole.getValue();
+           pole.wartosc = pole.getValue();
         }
-        return objekt;
     }
 
     public render(): any
     {
         this.formularz.innerHTML = "";
+        if(this.id)
+        {     
+            let obj = (new LocStorage()).loadDocument(this.id);
+            if (obj)
+            {   
+                for(let pole of obj.pola)
+                {          
+                    let p =  new InputField(pole.nazwa, pole.etykieta, pole.wartosc);
+                    p.typ = pole.typ;
+                    this.pola.push(p); 
+                }
+
+            }
+        }
+
         for (let pole of this.pola) 
         {
             this.formularz.appendChild((new FieldLabel(pole)).render()); 
@@ -191,7 +212,8 @@ class Form
 
     public save(): void
     {
-       (new LocStorage).saveDocument(this.getValue());
+       this.getValue();
+       (new LocStorage).saveDocument(this);
        window.location.href = "index.html";
     }
 
@@ -255,23 +277,6 @@ class LocStorage implements DataStorage
         return this.addDocumentId(id);
     }
 
-    public loadForm(id: string): any
-    {
-        let o = localStorage.getItem(id);
-        if (o)
-        {   
-            let obj = JSON.parse(o);
-            let form = new Form();
-            for(let pole of obj.pola)
-            {          
-                let p =  new InputField(pole.nazwa, pole.etykieta, pole.wartosc);
-                p.typ = pole.typ;
-                form.pola.push(p); 
-            }
-            return form;
-        }
-        return null;
-    }
 }
 
 class DocumentList
@@ -303,12 +308,14 @@ class DocumentList
         let table = document.createElement("table");
         for (let id of this.lista) 
         {
+
+            
             let tr = table.insertRow();
             let a = document.createElement('a');
             a.appendChild(document.createTextNode(id));
             if(id.substr(0, 4) == 'form')
             {
-                a.href = 'edit-form.html?id=' + id;
+                a.href = 'new-document.html?id=' + id;
             }
             else
             {
@@ -346,15 +353,15 @@ class App
 
     private createDocumentForm(id?: string): Form
     {
-        let doc = (new DocumentList).getDocument(id) || {};
-        let documentForm = new Form(); 
-        documentForm.pola.push(new InputField("imie", "Imię", doc.imie || ""));
-        documentForm.pola.push(new InputField("nazwisko", "Nazwisko", doc.nazwisko || ""));
-        documentForm.pola.push(new EmailField("email", "E-mail", doc.email || ""));
-        documentForm.pola.push(new SelectField("kierunek", "Kierunek studiów", ["Fizyka", "Matematyka"], doc.kierunek || ""));
-        documentForm.pola.push(new CheckboxField("elearning", "Czy preferujesz e-learning?", doc.elearning || false));
-        documentForm.pola.push(new TextAreaField("uwagi", "Uwagi", doc.uwagi || ""));
-        return documentForm.render();
+       let doc = (new DocumentList).getDocument(id) || {};
+       let documentForm = new Form();
+       for(let pole of doc.pola)
+       {          
+           let p =  new InputField(pole.nazwa, pole.etykieta, pole.wartosc);
+           p.typ = pole.typ;
+           documentForm.pola.push(p); 
+       }
+       return documentForm.render();
     }
 
     public editDocument()
@@ -370,6 +377,14 @@ class App
 
     public newDocument()
     {
+        let id = Router.getParam('id');
+        if(id)
+        {
+            let formularz = new Form(); 
+            formularz.id = id;
+            this.parent.appendChild(formularz.render());
+            return;
+        }
         this.parent.appendChild(this.createDocumentForm());
     }
 
@@ -385,6 +400,8 @@ class App
         } 
         this.parent.appendChild(fc.newForm());
     }
+
+
 }
 
 class Router
@@ -463,7 +480,7 @@ class FormCreator
 
     public editForm(id: string)
     {
-        this.formNew = (new LocStorage).loadForm(id);
+        this.formNew = (new LocStorage).loadDocument(id);
         this.div.innerHTML = "";
         this.div.appendChild(this.formNew.render());
         return this.content;

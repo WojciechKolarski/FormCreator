@@ -149,17 +149,32 @@ var Form = /** @class */ (function () {
         this.formularz = document.createElement("form");
     }
     Form.prototype.getValue = function () {
-        var objekt = {};
+        // let objekt: any = {};
+        //for (let pole of this.pola)
+        //{
+        //   objekt[pole.nazwa] = pole.getValue();
+        //}
+        //return objekt;
         for (var _i = 0, _a = this.pola; _i < _a.length; _i++) {
             var pole = _a[_i];
-            objekt[pole.nazwa] = pole.getValue();
+            pole.wartosc = pole.getValue();
         }
-        return objekt;
     };
     Form.prototype.render = function () {
         this.formularz.innerHTML = "";
-        for (var _i = 0, _a = this.pola; _i < _a.length; _i++) {
-            var pole = _a[_i];
+        if (this.id) {
+            var obj = (new LocStorage()).loadDocument(this.id);
+            if (obj) {
+                for (var _i = 0, _a = obj.pola; _i < _a.length; _i++) {
+                    var pole = _a[_i];
+                    var p = new InputField(pole.nazwa, pole.etykieta, pole.wartosc);
+                    p.typ = pole.typ;
+                    this.pola.push(p);
+                }
+            }
+        }
+        for (var _b = 0, _c = this.pola; _b < _c.length; _b++) {
+            var pole = _c[_b];
             this.formularz.appendChild((new FieldLabel(pole)).render());
             this.formularz.appendChild(pole.render());
         }
@@ -176,7 +191,8 @@ var Form = /** @class */ (function () {
         return this.formularz;
     };
     Form.prototype.save = function () {
-        (new LocStorage).saveDocument(this.getValue());
+        this.getValue();
+        (new LocStorage).saveDocument(this);
         window.location.href = "index.html";
     };
     return Form;
@@ -223,21 +239,6 @@ var LocStorage = /** @class */ (function () {
         localStorage.setItem(id, JSON.stringify(form));
         return this.addDocumentId(id);
     };
-    LocStorage.prototype.loadForm = function (id) {
-        var o = localStorage.getItem(id);
-        if (o) {
-            var obj = JSON.parse(o);
-            var form = new Form();
-            for (var _i = 0, _a = obj.pola; _i < _a.length; _i++) {
-                var pole = _a[_i];
-                var p = new InputField(pole.nazwa, pole.etykieta, pole.wartosc);
-                p.typ = pole.typ;
-                form.pola.push(p);
-            }
-            return form;
-        }
-        return null;
-    };
     return LocStorage;
 }());
 var DocumentList = /** @class */ (function () {
@@ -263,12 +264,11 @@ var DocumentList = /** @class */ (function () {
             var a = document.createElement('a');
             a.appendChild(document.createTextNode(id));
             if (id.substr(0, 4) == 'form') {
-                a.href = 'edit-form.html?id=' + id;
+                a.href = 'new-document.html?id=' + id;
             }
             else {
                 a.href = 'edit-document.html?id=' + id;
             }
-            // a.addEventListener('click', function(self, id){ return function(){ alert(JSON.stringify(self.storage.loadDocument(id))); }}(this, id));
             tr.insertCell().appendChild(a);
             var usun = document.createElement('button');
             usun.type = 'button';
@@ -297,12 +297,12 @@ var App = /** @class */ (function () {
     App.prototype.createDocumentForm = function (id) {
         var doc = (new DocumentList).getDocument(id) || {};
         var documentForm = new Form();
-        documentForm.pola.push(new InputField("imie", "Imię", doc.imie || ""));
-        documentForm.pola.push(new InputField("nazwisko", "Nazwisko", doc.nazwisko || ""));
-        documentForm.pola.push(new EmailField("email", "E-mail", doc.email || ""));
-        documentForm.pola.push(new SelectField("kierunek", "Kierunek studiów", ["Fizyka", "Matematyka"], doc.kierunek || ""));
-        documentForm.pola.push(new CheckboxField("elearning", "Czy preferujesz e-learning?", doc.elearning || false));
-        documentForm.pola.push(new TextAreaField("uwagi", "Uwagi", doc.uwagi || ""));
+        for (var _i = 0, _a = doc.pola; _i < _a.length; _i++) {
+            var pole = _a[_i];
+            var p = new InputField(pole.nazwa, pole.etykieta, pole.wartosc);
+            p.typ = pole.typ;
+            documentForm.pola.push(p);
+        }
         return documentForm.render();
     };
     App.prototype.editDocument = function () {
@@ -314,6 +314,13 @@ var App = /** @class */ (function () {
         this.parent.appendChild(new DocumentList().render());
     };
     App.prototype.newDocument = function () {
+        var id = Router.getParam('id');
+        if (id) {
+            var formularz = new Form();
+            formularz.id = id;
+            this.parent.appendChild(formularz.render());
+            return;
+        }
         this.parent.appendChild(this.createDocumentForm());
     };
     App.prototype.formCreator = function () {
@@ -392,7 +399,7 @@ var FormCreator = /** @class */ (function () {
         return this.content;
     };
     FormCreator.prototype.editForm = function (id) {
-        this.formNew = (new LocStorage).loadForm(id);
+        this.formNew = (new LocStorage).loadDocument(id);
         this.div.innerHTML = "";
         this.div.appendChild(this.formNew.render());
         return this.content;
